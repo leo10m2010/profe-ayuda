@@ -332,6 +332,23 @@ function installIllustrationEditor(container, scale) {
   const resetBtn = toolbar.querySelector('.ill-reset');
 
   const applyTransform = (x, y, scalePct) => `translate(${x}px, ${-y}px) scale(${Math.max(0.4, Math.min(3, scalePct / 100))})`;
+
+  const snapAxis = (value, targets, threshold) => {
+    let best = value;
+    let bestDist = threshold + 1;
+    let snapped = null;
+    for (const t of targets) {
+      const d = Math.abs(value - t);
+      if (d < bestDist) {
+        bestDist = d;
+        best = t;
+        snapped = t;
+      }
+    }
+    if (snapped === null) return { value, snapped: null };
+    return { value: best, snapped };
+  };
+
   const getLimits = (scalePct) => {
     const pageW = 794;
     const pageH = 1123;
@@ -359,8 +376,52 @@ function installIllustrationEditor(container, scale) {
       minX: txMin,
       maxX: txMax,
       minY: -tyMax,
-      maxY: -tyMin
+      maxY: -tyMin,
+      x0,
+      y0,
+      w,
+      h,
+      pageW,
+      pageH
     };
+  };
+
+  let vGuide = page.querySelector('.ws-snap-v');
+  let hGuide = page.querySelector('.ws-snap-h');
+  if (!vGuide) {
+    vGuide = document.createElement('div');
+    vGuide.className = 'ws-snap-v';
+    vGuide.style.cssText = 'position:absolute;top:0;bottom:0;width:1px;background:rgba(37,99,235,0.55);display:none;pointer-events:none;z-index:4;';
+    page.appendChild(vGuide);
+  }
+  if (!hGuide) {
+    hGuide = document.createElement('div');
+    hGuide.className = 'ws-snap-h';
+    hGuide.style.cssText = 'position:absolute;left:0;right:0;height:1px;background:rgba(37,99,235,0.55);display:none;pointer-events:none;z-index:4;';
+    page.appendChild(hGuide);
+  }
+
+  const hideSnapGuides = () => {
+    vGuide.style.display = 'none';
+    hGuide.style.display = 'none';
+  };
+
+  const showSnapGuides = (lim, tx, ty, snapX, snapY) => {
+    if (snapX !== null) {
+      const cx = lim.x0 + tx + (lim.w / 2);
+      vGuide.style.left = `${Math.round(cx)}px`;
+      vGuide.style.display = 'block';
+    } else {
+      vGuide.style.display = 'none';
+    }
+
+    if (snapY !== null) {
+      const cy = lim.y0 - ty + (lim.h / 2);
+      hGuide.style.top = `${Math.round(cy)}px`;
+      hGuide.style.display = 'block';
+    } else {
+      hGuide.style.display = 'none';
+    }
   };
 
   const applyStyle = () => {
@@ -408,11 +469,27 @@ function installIllustrationEditor(container, scale) {
     const dx = Math.round((e.clientX - startX) / Math.max(scale, 0.01));
     const dy = Math.round((e.clientY - startY) / Math.max(scale, 0.01));
     const lim = getLimits(S.illustrationScale);
-    const nx = clamp(baseX + dx, lim.minX, lim.maxX);
-    const ny = clamp(baseY - dy, lim.minY, lim.maxY);
+
+    let nx = clamp(baseX + dx, lim.minX, lim.maxX);
+    let ny = clamp(baseY - dy, lim.minY, lim.maxY);
+
+    let snapX = null;
+    let snapY = null;
+    if (!e.altKey) {
+      const xTargets = [lim.minX, (lim.minX + lim.maxX) / 2, lim.maxX];
+      const yTargets = [lim.minY, (lim.minY + lim.maxY) / 2, lim.maxY];
+      const sx = snapAxis(nx, xTargets, 14);
+      const sy = snapAxis(ny, yTargets, 14);
+      nx = sx.value;
+      ny = sy.value;
+      snapX = sx.snapped;
+      snapY = sy.snapped;
+    }
+
     S.illustrationOffsetX = nx;
     S.illustrationOffsetY = ny;
     img.style.transform = applyTransform(nx, ny, S.illustrationScale);
+    showSnapGuides(lim, nx, ny, snapX, snapY);
     img.classList.add('ws-ill-selected');
   };
 
@@ -422,9 +499,20 @@ function installIllustrationEditor(container, scale) {
     const dx = Math.round((e.clientX - startX) / Math.max(scale, 0.01));
     const dy = Math.round((e.clientY - startY) / Math.max(scale, 0.01));
     const lim = getLimits(S.illustrationScale);
-    S.illustrationOffsetX = clamp(baseX + dx, lim.minX, lim.maxX);
-    S.illustrationOffsetY = clamp(baseY - dy, lim.minY, lim.maxY);
+
+    let nx = clamp(baseX + dx, lim.minX, lim.maxX);
+    let ny = clamp(baseY - dy, lim.minY, lim.maxY);
+    if (!e.altKey) {
+      const xTargets = [lim.minX, (lim.minX + lim.maxX) / 2, lim.maxX];
+      const yTargets = [lim.minY, (lim.minY + lim.maxY) / 2, lim.maxY];
+      nx = snapAxis(nx, xTargets, 14).value;
+      ny = snapAxis(ny, yTargets, 14).value;
+    }
+
+    S.illustrationOffsetX = nx;
+    S.illustrationOffsetY = ny;
     applyStyle();
+    hideSnapGuides();
     window.removeEventListener('pointermove', onDragMove);
     window.removeEventListener('pointerup', endDrag);
     window.removeEventListener('pointercancel', cancelDrag);
@@ -432,6 +520,7 @@ function installIllustrationEditor(container, scale) {
 
   const cancelDrag = () => {
     dragging = false;
+    hideSnapGuides();
     window.removeEventListener('pointermove', onDragMove);
     window.removeEventListener('pointerup', endDrag);
     window.removeEventListener('pointercancel', cancelDrag);
