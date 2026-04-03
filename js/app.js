@@ -330,6 +330,7 @@ function updateProblemControlsUI() {
   const isAdd = (S.operation === 'add');
 
   const colsInput = document.getElementById('c-cols');
+  const colsField = document.getElementById('cols-field');
   const probsHelp = document.getElementById('probs-help');
   const addendsInput = document.getElementById('c-addends');
   const opField = document.getElementById('op-field');
@@ -354,6 +355,7 @@ function updateProblemControlsUI() {
     decimalsField.style.display = 'none';
     sepField.style.display = 'none';
     placeConfig.style.display = '';
+    colsField.style.display = 'none';
     colsInput.value = '2';
     colsInput.disabled = true;
     probsHelp.innerHTML = '<i class="bi bi-info-circle"></i> En valor posicional usa maximo 6 por hoja para evitar desbordes.';
@@ -364,6 +366,7 @@ function updateProblemControlsUI() {
   opField.style.display = '';
   divModeField.style.display = (S.operation === 'div') ? '' : 'none';
   placeConfig.style.display = 'none';
+  colsField.style.display = '';
   colsInput.disabled = false;
   probsHelp.innerHTML = '<i class="bi bi-info-circle"></i> En operaciones se permiten hasta 60 por hoja.';
   if (S.operation === 'div' && S.divMode === 'steps') {
@@ -423,10 +426,6 @@ function updateProblemControlsUI() {
 function init() {
   buildDigitCountsRow();
   genAndPreview();
-
-  if (window.location.protocol === 'file:') {
-    showNotice('Estas abriendo en modo local (file://). Si algo falla en PDF, usa un servidor local para mayor compatibilidad.', 'info', 8000);
-  }
 
   // ── Controles de VISUALIZACIÓN ──────────────────────────────────────────
   // Cambiar estos no toca los problemas generados, solo re-renderiza.

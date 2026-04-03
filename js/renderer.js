@@ -22,6 +22,40 @@ const PAD_H    = 52;    // padding top
 const PAD_B    = 44;    // padding bottom
 const PAD_SIDE = 62;    // padding izquierda y derecha
 
+function getTitleRenderMeta(rawTitle, isPlace) {
+  const clean = String(rawTitle || '').replace(/\s+/g, ' ').trim().toUpperCase();
+  const base = clean || 'OPERACIONES';
+
+  // Estilo "separado por letras" solo para titulos cortos.
+  if (base.length <= 14 && !base.includes(' ')) {
+    return {
+      text: base.split('').join(' '),
+      size: 34,
+      spacing: isPlace ? 4 : 10,
+      lineHeight: 1.05,
+      breakRule: 'normal'
+    };
+  }
+
+  if (base.length <= 24) {
+    return {
+      text: base,
+      size: 30,
+      spacing: 2,
+      lineHeight: 1.08,
+      breakRule: 'normal'
+    };
+  }
+
+  return {
+    text: base,
+    size: 24,
+    spacing: 1,
+    lineHeight: 1.15,
+    breakRule: 'break-word'
+  };
+}
+
 function renderPlaceBlocks(prob) {
   if (!S.placeBlocks) return '';
 
@@ -248,7 +282,7 @@ function getGlobalProblemNumber(sheetIdx, problemIdx) {
 function renderWsPage(sheetIdx, totalSheets, forPDF) {
   const { title, cols, showAns, showSelfEval } = S;
   const probs       = S.sheets[sheetIdx];
-  const spacedTitle = title.toUpperCase().split('').join(' ');
+  const tmeta       = getTitleRenderMeta(title, S.kind === 'place');
   const shadow      = forPDF ? '' : 'box-shadow:0 4px 22px rgba(0,0,0,0.13);';
   const isPlace = (S.kind === 'place');
   const isDivSteps = (S.kind === 'ops' && S.operation === 'div' && S.divMode === 'steps');
@@ -269,12 +303,16 @@ function renderWsPage(sheetIdx, totalSheets, forPDF) {
   // ── Título ───────────────────────────────────────────────────────────
   h += `<div style="
     text-align:center;
-    font-size:34px;
+    font-size:${tmeta.size}px;
     font-weight:900;
-    letter-spacing:${isPlace ? '4px' : '10px'};
+    letter-spacing:${tmeta.spacing}px;
+    line-height:${tmeta.lineHeight};
+    word-break:${tmeta.breakRule};
+    max-width:100%;
+    text-wrap:balance;
     margin-bottom:26px;
     flex-shrink:0;
-  ">${esc(spacedTitle)}</div>`;
+  ">${esc(tmeta.text)}</div>`;
 
   // ── Nombre / Fecha ───────────────────────────────────────────────────
   h += `<div style="
