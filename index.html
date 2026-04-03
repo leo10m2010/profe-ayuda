@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Generador de Fichas</title>
+
+  <!-- Estilos -->
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+
+  <!-- Exportación PDF en cliente -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body>
+<div id="layout">
+
+  <!-- ══════════════════════════════════
+       SIDEBAR — Panel de configuración
+       ══════════════════════════════════ -->
+  <aside id="sidebar">
+
+    <div id="sidebar-head">
+      <h1><i class="bi bi-grid-1x2-fill"></i> Generador de Fichas</h1>
+      <p>Operaciones y valor posicional para imprimir</p>
+    </div>
+
+    <div id="sidebar-body">
+
+      <!-- FICHA -->
+      <div class="section">
+        <div class="section-title"><i class="bi bi-file-earmark-text"></i> Ficha</div>
+        <div class="card">
+          <div class="field">
+            <label for="c-title"><i class="bi bi-type"></i> Titulo</label>
+            <input type="text" id="c-title" value="OPERACIONES" maxlength="20">
+          </div>
+          <div class="field">
+            <label for="c-kind"><i class="bi bi-ui-checks-grid"></i> Tipo de ficha</label>
+            <select id="c-kind">
+              <option value="ops">Operaciones</option>
+              <option value="place">Valor posicional</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="c-sheets"><i class="bi bi-files"></i> Hojas</label>
+            <input type="number" id="c-sheets" value="3" min="1" max="20">
+          </div>
+          <div class="field">
+            <label for="c-probs"><i class="bi bi-list-ol"></i> Problemas por hoja</label>
+            <input type="number" id="c-probs" value="16" min="1" max="60">
+          </div>
+          <div class="field-note" id="probs-help"><i class="bi bi-info-circle"></i> En operaciones se permiten hasta 60 por hoja.</div>
+          <div class="field">
+            <label for="c-cols"><i class="bi bi-columns-gap"></i> Columnas</label>
+            <input type="number" id="c-cols" value="4" min="1" max="6">
+          </div>
+        </div>
+      </div>
+
+      <!-- PROBLEMAS -->
+      <div class="section">
+        <div class="section-title"><i class="bi bi-calculator"></i> Problemas</div>
+        <div class="card">
+          <div id="ops-config">
+          <div class="field" id="op-field">
+            <label for="c-op"><i class="bi bi-sliders2"></i> Operacion</label>
+            <select id="c-op">
+              <option value="add">Suma (+)</option>
+              <option value="sub">Resta (-)</option>
+              <option value="mul">Multiplicacion (x)</option>
+              <option value="div">Division (/)</option>
+            </select>
+          </div>
+
+          <div class="field" id="addends-field">
+            <label for="c-addends"><i class="bi bi-diagram-3"></i> Sumandos</label>
+            <input type="number" id="c-addends" value="2" min="2" max="6">
+          </div>
+
+          <!-- Dígitos por sumando (fila dinámica generada por JS) -->
+          <div id="dc-wrap">
+            <span>Dígitos por sumando</span>
+            <div id="dc-row"></div>
+          </div>
+
+           <div class="field" id="dec-field">
+            <label for="c-dec"><i class="bi bi-dot"></i> Decimales</label>
+            <input type="number" id="c-dec" value="0" min="0" max="4">
+          </div>
+           <div class="field" id="sep-field">
+            <label for="c-sep"><i class="bi bi-signpost-split"></i> Separador decimal</label>
+            <select id="c-sep">
+              <option value=".">Punto (.)</option>
+              <option value=",">Coma (,)</option>
+            </select>
+          </div>
+           <div class="field" id="carry-field">
+             <label for="c-carry"><i class="bi bi-arrow-up-right-square"></i> Permitir llevadas</label>
+             <input type="checkbox" id="c-carry" checked>
+           </div>
+           <div class="field" id="divmode-field" style="display:none;">
+            <label for="c-div-mode"><i class="bi bi-border-all"></i> Formato division</label>
+            <select id="c-div-mode">
+              <option value="steps">Por pasos (casita)</option>
+              <option value="simple">Simple</option>
+            </select>
+          </div>
+          </div>
+
+          <div id="place-config" style="display:none;">
+            <div class="field">
+              <label for="c-place-level"><i class="bi bi-123"></i> Nivel</label>
+              <select id="c-place-level">
+                <option value="tens">Decenas y unidades</option>
+                <option value="hundreds">Centenas, decenas y unidades</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="c-place-blocks"><i class="bi bi-grid-3x3-gap"></i> Mostrar bloques</label>
+              <input type="checkbox" id="c-place-blocks" checked>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RESPUESTAS -->
+      <div class="section">
+        <div class="section-title"><i class="bi bi-check2-square"></i> Respuestas</div>
+        <div class="card">
+          <div class="field">
+            <label for="c-show-ans"><i class="bi bi-eye"></i> Mostrar en ficha</label>
+            <input type="checkbox" id="c-show-ans">
+          </div>
+          <div class="field">
+            <label for="c-ans-sheet"><i class="bi bi-journal-check"></i> Hoja de respuestas</label>
+            <input type="checkbox" id="c-ans-sheet" checked>
+          </div>
+          <div class="field">
+            <label for="c-selfeval"><i class="bi bi-clipboard2-pulse"></i> ¿Como ha ido?</label>
+            <input type="checkbox" id="c-selfeval" checked>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /sidebar-body -->
+
+    <div id="sidebar-foot">
+      <button class="btn btn-sec" onclick="regen()"><i class="bi bi-arrow-repeat"></i> Nueva generacion</button>
+      <button class="btn btn-pri" id="btn-pdf" onclick="exportPDF()"><i class="bi bi-filetype-pdf"></i> Exportar PDF</button>
+    </div>
+
+  </aside><!-- /sidebar -->
+
+  <!-- ══════════════════════════════════
+       MAIN — Vista previa
+       ══════════════════════════════════ -->
+  <main id="main">
+    <div id="main-label">Vista previa — Hoja 1</div>
+    <div id="notice" role="status" aria-live="polite" style="display:none;"></div>
+    <div id="preview"></div>
+  </main>
+
+</div><!-- /layout -->
+
+<!-- ══════════════════════════════════
+     Scripts (orden de dependencias)
+     ══════════════════════════════════ -->
+<script src="js/state.js"></script>
+<script src="js/generator.js"></script>
+<script src="js/formatter.js"></script>
+<script src="js/renderer.js"></script>
+<script src="js/app.js"></script>
+
+</body>
+</html>
