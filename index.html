@@ -56,6 +56,28 @@
             <label for="c-cols"><i class="bi bi-columns-gap"></i> Columnas</label>
             <input type="number" id="c-cols" value="4" min="1" max="6">
           </div>
+          <div class="field" id="ill-enabled-field">
+            <label for="c-ill-enabled"><i class="bi bi-image"></i> Ilustracion</label>
+            <input type="checkbox" id="c-ill-enabled">
+          </div>
+          <div class="field" id="ill-mode-field" style="display:none;">
+            <label for="c-ill-mode"><i class="bi bi-gear"></i> Modo</label>
+            <select id="c-ill-mode">
+              <option value="auto">Auto por tipo</option>
+              <option value="manual">Archivo manual</option>
+            </select>
+          </div>
+          <div class="field" id="ill-file-field" style="display:none;">
+            <label for="c-ill-file"><i class="bi bi-folder2-open"></i> Archivo</label>
+            <input type="text" id="c-ill-file" value="" placeholder="sumas.svg" maxlength="120">
+          </div>
+          <div class="field" id="ill-upload-field" style="display:none;">
+            <label for="c-ill-upload"><i class="bi bi-upload"></i> Subir imagen</label>
+            <input type="file" id="c-ill-upload" accept=".svg,.png,.jpg,.jpeg,.webp,image/*">
+          </div>
+          <div id="ill-dropzone" style="display:none;">
+            Arrastra una imagen aqui o usa "Subir imagen"
+          </div>
         </div>
       </div>
 

@@ -56,6 +56,29 @@ function getTitleRenderMeta(rawTitle, isPlace) {
   };
 }
 
+function getIllustrationSrc() {
+  if (!S.illustrationEnabled) return '';
+
+  if (S.illustrationMode === 'manual') {
+    const raw = (S.illustrationFile || '').trim();
+    if (!raw) return S.illustrationUploadedUrl || '';
+    if (/^(https?:)?\/\//.test(raw) || raw.startsWith('/') || raw.includes('/')) return raw;
+    return 'assets/illustrations/' + raw;
+  }
+
+  if (S.kind === 'place') {
+    return 'assets/illustrations/valor-posicional.svg';
+  }
+
+  const map = {
+    add: 'sumas.svg',
+    sub: 'restas.svg',
+    mul: 'multiplicaciones.svg',
+    div: 'divisiones.svg'
+  };
+  return 'assets/illustrations/' + (map[S.operation] || 'sumas.svg');
+}
+
 function renderPlaceBlocks(prob) {
   if (!S.placeBlocks) return '';
 
@@ -286,6 +309,7 @@ function renderWsPage(sheetIdx, totalSheets, forPDF) {
   const shadow      = forPDF ? '' : 'box-shadow:0 4px 22px rgba(0,0,0,0.13);';
   const isPlace = (S.kind === 'place');
   const isDivSteps = (S.kind === 'ops' && S.operation === 'div' && S.divMode === 'steps');
+  const illSrc = getIllustrationSrc();
 
   // ── Contenedor de página A4 ──────────────────────────────────────────
   let h = `<div class="ws-page-el" style="
@@ -295,10 +319,52 @@ function renderWsPage(sheetIdx, totalSheets, forPDF) {
     padding:${PAD_H}px ${PAD_SIDE}px ${PAD_B}px;
     display:flex;
     flex-direction:column;
+    position:relative;
+    overflow:hidden;
     font-family:Arial,Helvetica,sans-serif;
     box-sizing:border-box;
     ${shadow}
   ">`;
+
+  if (illSrc) {
+    const baseW = isPlace ? 210 : 240;
+    const illScale = Math.max(0.4, Math.min(3, (S.illustrationScale || 100) / 100));
+    const illOpacity = Math.max(0.02, Math.min(0.6, (S.illustrationOpacity || 14) / 100));
+    const offX = Math.max(-220, Math.min(220, S.illustrationOffsetX || 0));
+    const offY = Math.max(-220, Math.min(220, S.illustrationOffsetY || 0));
+    h += `<img
+      class="ws-ill-img"
+      src="${esc(illSrc)}"
+      alt=""
+      aria-hidden="true"
+      onerror="this.style.display='none'"
+      style="
+        position:absolute;
+        right:26px;
+        bottom:52px;
+        width:${baseW}px;
+        object-fit:contain;
+        opacity:${illOpacity};
+        z-index:0;
+        pointer-events:${forPDF ? 'none' : 'auto'};
+        transform:translate(${offX}px, ${-offY}px) scale(${illScale});
+        transform-origin:center center;
+      "
+      data-base-w="${baseW}"
+    >`;
+
+    if (!forPDF) {
+      h += `<div class="ws-ill-toolbar" title="Ajustes de ilustracion">
+        <label>Tamano
+          <input class="ill-size" type="range" min="40" max="220" value="${S.illustrationScale}">
+        </label>
+        <label>Opacidad
+          <input class="ill-opacity" type="range" min="0" max="100" value="${S.illustrationOpacity}">
+        </label>
+        <button type="button" class="ill-reset">Reset</button>
+      </div>`;
+    }
+  }
 
   // ── Título ───────────────────────────────────────────────────────────
   h += `<div style="
@@ -312,6 +378,8 @@ function renderWsPage(sheetIdx, totalSheets, forPDF) {
     text-wrap:balance;
     margin-bottom:26px;
     flex-shrink:0;
+    position:relative;
+    z-index:1;
   ">${esc(tmeta.text)}</div>`;
 
   // ── Nombre / Fecha ───────────────────────────────────────────────────
@@ -322,6 +390,8 @@ function renderWsPage(sheetIdx, totalSheets, forPDF) {
     margin-bottom:34px;
     font-size:13.5px;
     flex-shrink:0;
+    position:relative;
+    z-index:1;
   ">`;
   h += `<div style="display:flex;align-items:flex-end;gap:8px;">
     <span>Nombre:</span>
@@ -341,6 +411,8 @@ function renderWsPage(sheetIdx, totalSheets, forPDF) {
     gap:${isPlace ? '18px 14px' : (isDivSteps ? '42px 18px' : '36px 10px')};
     flex:1;
     align-content:start;
+    position:relative;
+    z-index:1;
   ">`;
   for (let i = 0; i < probs.length; i++) {
     h += renderProblem(probs[i], getGlobalProblemNumber(sheetIdx, i), showAns);
@@ -357,6 +429,8 @@ function renderWsPage(sheetIdx, totalSheets, forPDF) {
       font-size:12.5px;
       flex-wrap:wrap;
       flex-shrink:0;
+      position:relative;
+      z-index:1;
     ">`;
     h += `<strong>¿Cómo ha ido?</strong>`;
     for (const opt of ['Excelente', 'Bien', 'Necesito practicar más']) {
@@ -376,6 +450,8 @@ function renderWsPage(sheetIdx, totalSheets, forPDF) {
     font-size:10px;
     color:#9ca3af;
     flex-shrink:0;
+    position:relative;
+    z-index:1;
   ">`;
   h += `<span>Generador de Fichas</span>`;
   h += `<span>Página ${sheetIdx + 1} de ${totalSheets}</span>`;
@@ -504,4 +580,8 @@ function renderPreview() {
     el.style.zoom         = String(scale);
     el.style.marginBottom = '24px';
   });
+
+  if (typeof installIllustrationEditor === 'function') {
+    installIllustrationEditor(container, scale);
+  }
 }

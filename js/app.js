@@ -15,6 +15,9 @@ function readControls() {
   const colsInput = document.getElementById('c-cols');
   const decInput = document.getElementById('c-dec');
   const showAnsInput = document.getElementById('c-show-ans');
+  const illEnabledInput = document.getElementById('c-ill-enabled');
+  const illModeInput = document.getElementById('c-ill-mode');
+  const illFileInput = document.getElementById('c-ill-file');
 
   S.title         = document.getElementById('c-title').value.trim() || 'OPERACIONES';
   S.numSheets     = clamp(parseInt(document.getElementById('c-sheets').value)  || 1,  1, 20);
@@ -47,6 +50,14 @@ function readControls() {
   S.showAns       = showAnsInput.checked;
   S.showAnsSheet  = document.getElementById('c-ans-sheet').checked;
   S.showSelfEval  = document.getElementById('c-selfeval').checked;
+  S.illustrationEnabled = illEnabledInput.checked;
+  S.illustrationMode = illModeInput.value;
+  S.illustrationFile = illFileInput.value.trim();
+
+  if (S.illustrationMode === 'manual' && S.illustrationFile && S.illustrationUploadedUrl) {
+    URL.revokeObjectURL(S.illustrationUploadedUrl);
+    S.illustrationUploadedUrl = '';
+  }
 
   if (S.kind === 'place') {
     if (prevKind === 'ops') {
@@ -221,6 +232,209 @@ function showNotice(message, type, timeoutMs) {
   }
 }
 
+function applyUploadedIllustration(file) {
+  if (!file) return;
+
+  const looksImage = (file.type && file.type.startsWith('image/')) || /\.(svg|png|jpe?g|webp)$/i.test(file.name || '');
+  if (!looksImage) {
+    showNotice('Archivo no valido. Usa SVG, PNG, JPG o WEBP.', 'error', 4500);
+    return;
+  }
+
+  if (S.illustrationUploadedUrl) {
+    URL.revokeObjectURL(S.illustrationUploadedUrl);
+  }
+
+  S.illustrationUploadedUrl = URL.createObjectURL(file);
+  document.getElementById('c-ill-enabled').checked = true;
+  document.getElementById('c-ill-mode').value = 'manual';
+  document.getElementById('c-ill-file').value = '';
+
+  readControls();
+  updateProblemControlsUI();
+  renderPreview();
+  showNotice('Ilustracion cargada correctamente.', 'success', 2600);
+}
+
+function installIllustrationEditor(container, scale) {
+  const img = container.querySelector('.ws-ill-img');
+  const toolbar = container.querySelector('.ws-ill-toolbar');
+  if (!img || !toolbar || !S.illustrationEnabled) return;
+
+  const page = img.closest('.ws-page-el') || container;
+
+  const sizeR = toolbar.querySelector('.ill-size');
+  const opaR = toolbar.querySelector('.ill-opacity');
+  const resetBtn = toolbar.querySelector('.ill-reset');
+
+  const applyTransform = (x, y, scalePct) => `translate(${x}px, ${-y}px) scale(${Math.max(0.4, Math.min(3, scalePct / 100))})`;
+  const getLimit = (scalePct) => {
+    const factor = Math.max(0.4, Math.min(3, scalePct / 100));
+    return Math.round(220 / Math.max(factor, 0.4));
+  };
+
+  const applyStyle = () => {
+    img.style.width = `${img.dataset.baseW ? Number(img.dataset.baseW) : 240}px`;
+    img.style.opacity = String(Math.max(0, Math.min(1, S.illustrationOpacity / 100)));
+    const lim = getLimit(S.illustrationScale);
+    S.illustrationOffsetX = clamp(S.illustrationOffsetX, -lim, lim);
+    S.illustrationOffsetY = clamp(S.illustrationOffsetY, -lim, lim);
+    img.style.transform = applyTransform(S.illustrationOffsetX, S.illustrationOffsetY, S.illustrationScale);
+    if (sizeR) sizeR.value = String(S.illustrationScale);
+    if (opaR) opaR.value = String(S.illustrationOpacity);
+  };
+
+  applyStyle();
+  img.draggable = false;
+  img.style.pointerEvents = 'none';
+  img.classList.add('ws-ill-editable');
+
+  let dragging = false;
+  let startX = 0;
+  let startY = 0;
+  let baseX = S.illustrationOffsetX;
+  let baseY = S.illustrationOffsetY;
+
+  const hitImageArea = (e) => {
+    const r = img.getBoundingClientRect();
+    return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+  };
+
+  const startDrag = e => {
+    if (!hitImageArea(e)) return;
+    if (toolbar.contains(e.target)) return;
+    e.preventDefault();
+    dragging = true;
+    startX = e.clientX;
+    startY = e.clientY;
+    baseX = S.illustrationOffsetX;
+    baseY = S.illustrationOffsetY;
+    page.setPointerCapture(e.pointerId);
+    img.classList.add('ws-ill-selected');
+  };
+
+  const onDragMove = e => {
+    if (!dragging) return;
+    const dx = Math.round((e.clientX - startX) / Math.max(scale, 0.01));
+    const dy = Math.round((e.clientY - startY) / Math.max(scale, 0.01));
+    const lim = getLimit(S.illustrationScale);
+    const nx = clamp(baseX + dx, -lim, lim);
+    const ny = clamp(baseY - dy, -lim, lim);
+    S.illustrationOffsetX = nx;
+    S.illustrationOffsetY = ny;
+    img.style.transform = applyTransform(nx, ny, S.illustrationScale);
+    img.classList.add('ws-ill-selected');
+  };
+
+  const endDrag = e => {
+    if (!dragging) return;
+    dragging = false;
+    const dx = Math.round((e.clientX - startX) / Math.max(scale, 0.01));
+    const dy = Math.round((e.clientY - startY) / Math.max(scale, 0.01));
+    const lim = getLimit(S.illustrationScale);
+    S.illustrationOffsetX = clamp(baseX + dx, -lim, lim);
+    S.illustrationOffsetY = clamp(baseY - dy, -lim, lim);
+    applyStyle();
+    window.removeEventListener('pointermove', onDragMove);
+    window.removeEventListener('pointerup', endDrag);
+    window.removeEventListener('pointercancel', cancelDrag);
+  };
+
+  const cancelDrag = () => {
+    dragging = false;
+    window.removeEventListener('pointermove', onDragMove);
+    window.removeEventListener('pointerup', endDrag);
+    window.removeEventListener('pointercancel', cancelDrag);
+  };
+
+  const startDragWithListeners = (e) => {
+    startDrag(e);
+    if (!dragging) return;
+    window.addEventListener('pointermove', onDragMove);
+    window.addEventListener('pointerup', endDrag);
+    window.addEventListener('pointercancel', cancelDrag);
+  };
+
+  page.addEventListener('pointerdown', startDragWithListeners);
+
+  if (sizeR) {
+    sizeR.value = String(S.illustrationScale);
+    sizeR.addEventListener('input', () => {
+      S.illustrationScale = clamp(parseInt(sizeR.value) || 100, 40, 220);
+      applyStyle();
+    });
+  }
+
+  if (opaR) {
+    opaR.value = String(S.illustrationOpacity);
+    opaR.addEventListener('input', () => {
+      S.illustrationOpacity = clamp(parseInt(opaR.value) || 14, 0, 100);
+      applyStyle();
+    });
+  }
+
+  if (resetBtn) {
+    resetBtn.addEventListener('click', () => {
+      S.illustrationScale = 100;
+      S.illustrationOpacity = 14;
+      S.illustrationOffsetX = 0;
+      S.illustrationOffsetY = 0;
+      applyStyle();
+    });
+  }
+}
+
+async function waitForImagesReady(root, timeoutMs) {
+  const imgs = Array.from(root.querySelectorAll('img'));
+  if (!imgs.length) return;
+
+  const timeout = new Promise(resolve => setTimeout(resolve, timeoutMs || 2500));
+  const done = Promise.all(imgs.map(img => {
+    if (img.complete && img.naturalWidth > 0) return Promise.resolve();
+    return new Promise(resolve => {
+      const finish = () => resolve();
+      img.addEventListener('load', finish, { once: true });
+      img.addEventListener('error', finish, { once: true });
+    });
+  }));
+
+  await Promise.race([done, timeout]);
+}
+
+async function inlineIllustrationsForExport(root) {
+  const isFileProtocol = (window.location.protocol === 'file:');
+  let skippedByFileProtocol = false;
+
+  const imgs = Array.from(root.querySelectorAll('.ws-ill-img'));
+  for (const img of imgs) {
+    const src = img.getAttribute('src') || '';
+    if (!src || src.startsWith('data:') || src.startsWith('blob:')) continue;
+
+    // En file:// el navegador bloquea fetch de rutas locales por CORS.
+    if (isFileProtocol && !/^(https?:)?\/\//.test(src)) {
+      skippedByFileProtocol = true;
+      continue;
+    }
+
+    try {
+      const res = await fetch(src, { mode: 'cors' });
+      if (!res.ok) continue;
+      const blob = await res.blob();
+      const dataUrl = await new Promise(resolve => {
+        const fr = new FileReader();
+        fr.onload = () => resolve(fr.result);
+        fr.onerror = () => resolve('');
+        fr.readAsDataURL(blob);
+      });
+      if (dataUrl) img.setAttribute('src', dataUrl);
+    } catch {
+      // Si no se puede inyectar (ej: file:// o CORS externo), seguimos.
+    }
+  }
+
+  return { skippedByFileProtocol };
+}
+
 // ─────────────────────────────────────────────
 // EXPORTACIÓN PDF
 //
@@ -290,13 +504,19 @@ async function exportPDF() {
 
     // Dos frames para que el navegador termine de calcular estilos y layout
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const inlineRes = await inlineIllustrationsForExport(wrap);
+    await waitForImagesReady(wrap, 3000);
+
+    if (inlineRes && inlineRes.skippedByFileProtocol) {
+      showNotice('En modo file:// el navegador limita imagenes locales en PDF. Para incluirlas, usa servidor local o sube la imagen en modo manual.', 'info', 7000);
+    }
 
     const pages = Array.from(wrap.children);
     if (!pages.length) throw new Error('No hay contenido para exportar');
 
     const pdf = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
     for (let i = 0; i < pages.length; i++) {
-      const canvas = await html2canvas(pages[i], {
+      let canvas = await html2canvas(pages[i], {
         scale: 2,
         useCORS: true,
         logging: false,
@@ -307,7 +527,32 @@ async function exportPDF() {
         scrollY: 0
       });
 
-      const img = canvas.toDataURL('image/jpeg', 0.98);
+      let img;
+      try {
+        img = canvas.toDataURL('image/jpeg', 0.98);
+      } catch (e) {
+        // Fallback para canvas contaminado por recursos externos sin CORS.
+        const ill = pages[i].querySelector('.ws-ill-img');
+        if (!ill) throw e;
+
+        const prevDisplay = ill.style.display;
+        ill.style.display = 'none';
+        canvas = await html2canvas(pages[i], {
+          scale: 2,
+          useCORS: true,
+          logging: false,
+          backgroundColor: '#ffffff',
+          width: 794,
+          windowWidth: 794,
+          scrollX: 0,
+          scrollY: 0
+        });
+        ill.style.display = prevDisplay;
+        img = canvas.toDataURL('image/jpeg', 0.98);
+
+        showNotice('Se omitio la ilustracion en una pagina del PDF por restriccion CORS.', 'info', 5000);
+      }
+
       if (i > 0) pdf.addPage('a4', 'portrait');
       pdf.addImage(img, 'JPEG', 0, 0, 210, 297);
     }
@@ -333,6 +578,11 @@ function updateProblemControlsUI() {
   const colsField = document.getElementById('cols-field');
   const probsHelp = document.getElementById('probs-help');
   const addendsInput = document.getElementById('c-addends');
+  const illEnabledField = document.getElementById('ill-enabled-field');
+  const illModeField = document.getElementById('ill-mode-field');
+  const illFileField = document.getElementById('ill-file-field');
+  const illUploadField = document.getElementById('ill-upload-field');
+  const illDropzone = document.getElementById('ill-dropzone');
   const opField = document.getElementById('op-field');
   const divModeField = document.getElementById('divmode-field');
   const addendsField = document.getElementById('addends-field');
@@ -360,6 +610,12 @@ function updateProblemControlsUI() {
     colsInput.disabled = true;
     probsHelp.innerHTML = '<i class="bi bi-info-circle"></i> En valor posicional usa maximo 6 por hoja para evitar desbordes.';
     showAnsField.style.display = 'none';
+
+    illEnabledField.style.display = '';
+    illModeField.style.display = S.illustrationEnabled ? '' : 'none';
+    illFileField.style.display = (S.illustrationEnabled && S.illustrationMode === 'manual') ? '' : 'none';
+    illUploadField.style.display = (S.illustrationEnabled && S.illustrationMode === 'manual') ? '' : 'none';
+    illDropzone.style.display = (S.illustrationEnabled && S.illustrationMode === 'manual') ? '' : 'none';
     return;
   }
 
@@ -373,6 +629,12 @@ function updateProblemControlsUI() {
     probsHelp.innerHTML = '<i class="bi bi-info-circle"></i> En division por pasos el maximo depende de columnas (4 filas por pagina).';
   }
   showAnsField.style.display = '';
+
+  illEnabledField.style.display = '';
+  illModeField.style.display = S.illustrationEnabled ? '' : 'none';
+  illFileField.style.display = (S.illustrationEnabled && S.illustrationMode === 'manual') ? '' : 'none';
+  illUploadField.style.display = (S.illustrationEnabled && S.illustrationMode === 'manual') ? '' : 'none';
+  illDropzone.style.display = (S.illustrationEnabled && S.illustrationMode === 'manual') ? '' : 'none';
 
   if (isAdd) {
     addendsLabel.innerHTML = '<i class="bi bi-diagram-3"></i> Sumandos';
@@ -429,7 +691,7 @@ function init() {
 
   // ── Controles de VISUALIZACIÓN ──────────────────────────────────────────
   // Cambiar estos no toca los problemas generados, solo re-renderiza.
-  const displayIds = ['c-title', 'c-cols', 'c-sep', 'c-show-ans', 'c-ans-sheet', 'c-selfeval'];
+  const displayIds = ['c-title', 'c-cols', 'c-sep', 'c-show-ans', 'c-ans-sheet', 'c-selfeval', 'c-ill-enabled', 'c-ill-mode', 'c-ill-file'];
   displayIds.forEach(id => {
     const el = document.getElementById(id);
     el.addEventListener('change', onDisplayChange);
@@ -447,6 +709,31 @@ function init() {
     if (el.tagName === 'INPUT' && el.type === 'number') {
       el.addEventListener('input', genAndPreview);
     }
+  });
+
+  const illUpload = document.getElementById('c-ill-upload');
+  illUpload.addEventListener('change', () => {
+    const file = illUpload.files && illUpload.files[0];
+    applyUploadedIllustration(file);
+    illUpload.value = '';
+  });
+
+  const dropzone = document.getElementById('ill-dropzone');
+  ['dragenter', 'dragover'].forEach(evt => {
+    dropzone.addEventListener(evt, e => {
+      e.preventDefault();
+      dropzone.classList.add('dragover');
+    });
+  });
+  ['dragleave', 'dragend', 'drop'].forEach(evt => {
+    dropzone.addEventListener(evt, e => {
+      e.preventDefault();
+      dropzone.classList.remove('dragover');
+    });
+  });
+  dropzone.addEventListener('drop', e => {
+    const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    applyUploadedIllustration(file);
   });
 
   window.addEventListener('resize', renderPreview);

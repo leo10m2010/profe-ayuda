@@ -9,6 +9,8 @@ Aplicacion web para crear fichas imprimibles de matematicas en primaria.
 - Vista previa en pantalla y exportacion a **PDF**.
 - Hoja de respuestas opcional.
 - Configuracion rapida desde panel lateral.
+- Ilustraciones opcionales con control de tamano, posicion y transparencia.
+- Carga manual de ilustraciones por boton o arrastrando archivos (drag and drop).
 
 ## Tecnologias
 
@@ -25,6 +27,7 @@ Aplicacion web para crear fichas imprimibles de matematicas en primaria.
 - `js/formatter.js`: formato de numeros y texto
 - `js/renderer.js`: render de fichas y respuestas
 - `js/app.js`: eventos, sincronizacion UI y exportacion PDF
+- `assets/illustrations/`: ilustraciones opcionales para decorar fichas
 
 ## Uso local
 
