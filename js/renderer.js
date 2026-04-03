@@ -58,25 +58,7 @@ function getTitleRenderMeta(rawTitle, isPlace) {
 
 function getIllustrationSrc() {
   if (!S.illustrationEnabled) return '';
-
-  if (S.illustrationMode === 'manual') {
-    const raw = (S.illustrationFile || '').trim();
-    if (!raw) return S.illustrationUploadedUrl || '';
-    if (/^(https?:)?\/\//.test(raw) || raw.startsWith('/') || raw.includes('/')) return raw;
-    return 'assets/illustrations/' + raw;
-  }
-
-  if (S.kind === 'place') {
-    return 'assets/illustrations/valor-posicional.svg';
-  }
-
-  const map = {
-    add: 'sumas.svg',
-    sub: 'restas.svg',
-    mul: 'multiplicaciones.svg',
-    div: 'divisiones.svg'
-  };
-  return 'assets/illustrations/' + (map[S.operation] || 'sumas.svg');
+  return S.illustrationUploadedUrl || '';
 }
 
 function renderPlaceBlocks(prob) {
@@ -330,8 +312,8 @@ function renderWsPage(sheetIdx, totalSheets, forPDF) {
     const baseW = isPlace ? 210 : 240;
     const illScale = Math.max(0.4, Math.min(3, (S.illustrationScale || 100) / 100));
     const illOpacity = Math.max(0.02, Math.min(0.6, (S.illustrationOpacity || 14) / 100));
-    const offX = Math.max(-220, Math.min(220, S.illustrationOffsetX || 0));
-    const offY = Math.max(-220, Math.min(220, S.illustrationOffsetY || 0));
+    const offX = S.illustrationOffsetX || 0;
+    const offY = S.illustrationOffsetY || 0;
     h += `<img
       class="ws-ill-img"
       src="${esc(illSrc)}"

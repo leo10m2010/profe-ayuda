@@ -26,6 +26,35 @@ function randWithDigits(intDigits) {
   return randInt(pow10(intDigits - 1), pow10(intDigits) - 1);
 }
 
+function digitsToInt(digits) {
+  let n = 0;
+  for (let c = 0; c < digits.length; c++) n += digits[c] * pow10(c);
+  return n;
+}
+
+function isWithinMaxNumber(prob) {
+  const maxN = S.maxNumber;
+  if (!maxN || maxN <= 0) return true;
+
+  if (prob.op === 'add') {
+    for (const d of prob.addends) {
+      if (digitsToInt(d) > maxN) return false;
+    }
+    return prob.result <= maxN;
+  }
+
+  if (prob.op === 'place') return true;
+
+  if (prob.result > maxN) return false;
+  if (prob.operands) {
+    for (const n of prob.operands) {
+      if (n > maxN) return false;
+    }
+  }
+
+  return true;
+}
+
 function generateAddProblem() {
   const { numAddends, digitCounts, decimals, allowCarry } = S;
   const maxInt = Math.max(...digitCounts);
@@ -97,12 +126,51 @@ function generateSubProblem() {
   const d1 = S.digitCounts[0] || 2;
   const d2 = S.digitCounts[1] || 2;
 
-  let a = randScaled(d1, decimals);
-  let b = randScaled(d2, decimals);
-  if (a < b) {
-    const t = a;
-    a = b;
-    b = t;
+  let a = 0;
+  let b = 0;
+
+  if (!S.allowCarry) {
+    const colsA = d1 + decimals;
+    const colsB = Math.min(d2 + decimals, colsA);
+    const bDigits = new Array(colsB).fill(0);
+    const aDigits = new Array(colsA).fill(0);
+
+    for (let col = 0; col < colsB; col++) {
+      const isLeadB = (col === colsB - 1);
+      const loB = isLeadB ? 1 : 0;
+      bDigits[col] = randInt(loB, 9);
+    }
+
+    for (let col = 0; col < colsA; col++) {
+      const isLeadA = (col === colsA - 1);
+      const fromB = col < colsB ? bDigits[col] : 0;
+      const loA = Math.max(isLeadA ? 1 : 0, fromB);
+      aDigits[col] = randInt(loA, 9);
+    }
+
+    a = digitsToInt(aDigits);
+    b = digitsToInt(bDigits);
+  } else {
+    const colsA = d1 + decimals;
+    const colsB = d2 + decimals;
+    const minA = pow10(colsA - 1);
+    const maxA = pow10(colsA) - 1;
+    const minB = pow10(colsB - 1);
+
+    let found = false;
+    for (let i = 0; i < 120; i++) {
+      a = randInt(minA, maxA);
+      const maxB = Math.min(pow10(colsB) - 1, a);
+      if (minB > maxB) continue;
+      b = randInt(minB, maxB);
+      found = true;
+      break;
+    }
+
+    if (!found) {
+      a = randScaled(d1, decimals);
+      b = Math.min(a, randScaled(d2, decimals));
+    }
   }
 
   return {
@@ -218,24 +286,59 @@ function generatePlaceProblem() {
   };
 }
 
+function placeProblemKey(prob) {
+  return `${prob.level}:${prob.value}`;
+}
+
+function generateUniquePlaceProblem(usedSet, maxUnique) {
+  if (!usedSet) return generatePlaceProblem();
+  if (usedSet.size >= maxUnique) return generatePlaceProblem();
+
+  for (let i = 0; i < 300; i++) {
+    const p = generatePlaceProblem();
+    const key = placeProblemKey(p);
+    if (!usedSet.has(key)) {
+      usedSet.add(key);
+      return p;
+    }
+  }
+
+  return generatePlaceProblem();
+}
+
 function generateProblem() {
   if (S.kind === 'place') return generatePlaceProblem();
 
-  switch (S.operation) {
-    case 'sub': return generateSubProblem();
-    case 'mul': return generateMulProblem();
-    case 'div': return generateDivProblem();
-    case 'add':
-    default: return generateAddProblem();
+  let last = null;
+  for (let i = 0; i < 220; i++) {
+    switch (S.operation) {
+      case 'sub': last = generateSubProblem(); break;
+      case 'mul': last = generateMulProblem(); break;
+      case 'div': last = generateDivProblem(); break;
+      case 'add':
+      default: last = generateAddProblem(); break;
+    }
+
+    if (isWithinMaxNumber(last)) return last;
   }
+
+  // Fallback: devolvemos el ultimo generado para no bloquear UI.
+  return last;
 }
 
 function genAll() {
   S.sheets = [];
+  const usedPlace = (S.kind === 'place') ? new Set() : null;
+  const maxUniquePlace = (S.placeLevel === 'hundreds') ? 900 : 90;
+
   for (let s = 0; s < S.numSheets; s++) {
     const sheet = [];
     for (let p = 0; p < S.probsPerSheet; p++) {
-      sheet.push(generateProblem());
+      if (S.kind === 'place') {
+        sheet.push(generateUniquePlaceProblem(usedPlace, maxUniquePlace));
+      } else {
+        sheet.push(generateProblem());
+      }
     }
     S.sheets.push(sheet);
   }

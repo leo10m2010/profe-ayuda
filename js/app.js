@@ -16,15 +16,16 @@ function readControls() {
   const decInput = document.getElementById('c-dec');
   const showAnsInput = document.getElementById('c-show-ans');
   const illEnabledInput = document.getElementById('c-ill-enabled');
-  const illModeInput = document.getElementById('c-ill-mode');
-  const illFileInput = document.getElementById('c-ill-file');
 
   S.title         = document.getElementById('c-title').value.trim() || 'OPERACIONES';
-  S.numSheets     = clamp(parseInt(document.getElementById('c-sheets').value)  || 1,  1, 20);
+  const sheetsParsed = Number.parseInt(document.getElementById('c-sheets').value, 10);
+  S.numSheets = clamp(Number.isFinite(sheetsParsed) ? sheetsParsed : (S.numSheets || 1), 1, 20);
   const probsInput = document.getElementById('c-probs');
-  const rawProbs = parseInt(probsInput.value) || 16;
+  const probsParsed = Number.parseInt(probsInput.value, 10);
+  const rawProbs = Number.isFinite(probsParsed) ? probsParsed : (S.probsPerSheet || 16);
   S.probsPerSheet = clamp(rawProbs, 1, 60);
-  S.cols          = clamp(parseInt(colsInput.value) || 4, 1, 6);
+  const colsParsed = Number.parseInt(colsInput.value, 10);
+  S.cols = clamp(Number.isFinite(colsParsed) ? colsParsed : (S.cols || 4), 1, 6);
   S.kind          = document.getElementById('c-kind').value;
 
   if (prevKind !== S.kind) {
@@ -41,6 +42,16 @@ function readControls() {
   }
 
   S.operation     = document.getElementById('c-op').value;
+  const maxNumInput = document.getElementById('c-maxnum');
+  const rawMax = maxNumInput.value.trim();
+  const parsedMax = Number.parseInt(rawMax, 10);
+  if (Number.isFinite(parsedMax)) {
+    S.maxNumber = clamp(parsedMax, 9, 999999);
+    maxNumInput.value = String(S.maxNumber);
+  } else if (!Number.isFinite(S.maxNumber)) {
+    S.maxNumber = 999;
+    maxNumInput.value = '999';
+  }
   S.divMode       = document.getElementById('c-div-mode').value;
   S.placeLevel    = document.getElementById('c-place-level').value;
   S.placeBlocks   = document.getElementById('c-place-blocks').checked;
@@ -51,13 +62,6 @@ function readControls() {
   S.showAnsSheet  = document.getElementById('c-ans-sheet').checked;
   S.showSelfEval  = document.getElementById('c-selfeval').checked;
   S.illustrationEnabled = illEnabledInput.checked;
-  S.illustrationMode = illModeInput.value;
-  S.illustrationFile = illFileInput.value.trim();
-
-  if (S.illustrationMode === 'manual' && S.illustrationFile && S.illustrationUploadedUrl) {
-    URL.revokeObjectURL(S.illustrationUploadedUrl);
-    S.illustrationUploadedUrl = '';
-  }
 
   if (S.kind === 'place') {
     if (prevKind === 'ops') {
@@ -146,10 +150,29 @@ function readControls() {
     }
   });
 
+  // Si el maximo configurado es pequeno, limitamos digitos para evitar
+  // combinaciones imposibles (ej: max 79 con 3 digitos).
+  if (S.kind === 'ops') {
+    const maxDigits = String(Math.max(1, Math.floor(S.maxNumber))).length;
+    document.querySelectorAll('#dc-row .dc-inp').forEach(inp => {
+      const idx = parseInt(inp.dataset.idx);
+      if (idx < S.numAddends) {
+        S.digitCounts[idx] = Math.min(S.digitCounts[idx], maxDigits);
+        inp.value = String(S.digitCounts[idx]);
+      }
+    });
+  }
+
   if (S.kind === 'ops' && S.operation === 'div' && S.digitCounts[1] > S.digitCounts[0]) {
     S.digitCounts[1] = S.digitCounts[0];
     const last = document.querySelector('#dc-row .dc-inp[data-idx="1"]');
     if (last) last.value = String(S.digitCounts[1]);
+  }
+
+  if (S.kind === 'ops' && S.operation === 'sub' && !S.allowCarry && S.digitCounts[1] > S.digitCounts[0]) {
+    S.digitCounts[1] = S.digitCounts[0];
+    const subtr = document.querySelector('#dc-row .dc-inp[data-idx="1"]');
+    if (subtr) subtr.value = String(S.digitCounts[1]);
   }
 }
 
@@ -213,6 +236,13 @@ function regen() {
 }
 
 let noticeTimer = null;
+const BUILTIN_ILLS = [
+  { key: 'sumas', src: 'assets/illustrations/sumas.svg' },
+  { key: 'restas', src: 'assets/illustrations/restas.svg' },
+  { key: 'multiplicaciones', src: 'assets/illustrations/multiplicaciones.svg' },
+  { key: 'divisiones', src: 'assets/illustrations/divisiones.svg' },
+  { key: 'valor-posicional', src: 'assets/illustrations/valor-posicional.svg' }
+];
 
 function showNotice(message, type, timeoutMs) {
   const notice = document.getElementById('notice');
@@ -241,19 +271,53 @@ function applyUploadedIllustration(file) {
     return;
   }
 
-  if (S.illustrationUploadedUrl) {
+  if (S.illustrationUploadedUrl && S.illustrationUploadedUrl.startsWith('blob:')) {
     URL.revokeObjectURL(S.illustrationUploadedUrl);
   }
 
   S.illustrationUploadedUrl = URL.createObjectURL(file);
   document.getElementById('c-ill-enabled').checked = true;
-  document.getElementById('c-ill-mode').value = 'manual';
-  document.getElementById('c-ill-file').value = '';
 
   readControls();
   updateProblemControlsUI();
   renderPreview();
   showNotice('Ilustracion cargada correctamente.', 'success', 2600);
+}
+
+function renderIllustrationGallery() {
+  const host = document.getElementById('ill-gallery');
+  if (!host) return;
+
+  host.innerHTML = BUILTIN_ILLS.map(item => {
+    const active = S.illustrationUploadedUrl === item.src;
+    return `<button type="button" class="ill-thumb${active ? ' active' : ''}" data-src="${item.src}" title="Usar ${item.key}">
+      <img src="${item.src}" alt="${item.key}">
+    </button>`;
+  }).join('');
+
+  host.querySelectorAll('.ill-thumb').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const src = btn.getAttribute('data-src');
+      if (S.illustrationUploadedUrl && S.illustrationUploadedUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(S.illustrationUploadedUrl);
+      }
+      S.illustrationUploadedUrl = src;
+      document.getElementById('c-ill-enabled').checked = true;
+      readControls();
+      updateProblemControlsUI();
+      renderPreview();
+    });
+  });
+}
+
+function clearUploadedIllustration() {
+  if (S.illustrationUploadedUrl && S.illustrationUploadedUrl.startsWith('blob:')) {
+    URL.revokeObjectURL(S.illustrationUploadedUrl);
+  }
+  S.illustrationUploadedUrl = '';
+  updateProblemControlsUI();
+  renderPreview();
+  showNotice('Imagen manual eliminada.', 'info', 2200);
 }
 
 function installIllustrationEditor(container, scale) {
@@ -268,17 +332,43 @@ function installIllustrationEditor(container, scale) {
   const resetBtn = toolbar.querySelector('.ill-reset');
 
   const applyTransform = (x, y, scalePct) => `translate(${x}px, ${-y}px) scale(${Math.max(0.4, Math.min(3, scalePct / 100))})`;
-  const getLimit = (scalePct) => {
+  const getLimits = (scalePct) => {
+    const pageW = 794;
+    const pageH = 1123;
+    const right = 26;
+    const bottom = 52;
+
     const factor = Math.max(0.4, Math.min(3, scalePct / 100));
-    return Math.round(220 / Math.max(factor, 0.4));
+    const baseW = img.dataset.baseW ? Number(img.dataset.baseW) : 240;
+    const ratio = (img.naturalWidth > 0 && img.naturalHeight > 0)
+      ? (img.naturalHeight / img.naturalWidth)
+      : 1;
+
+    const w = baseW * factor;
+    const h = w * ratio;
+
+    const x0 = pageW - right - w;
+    const y0 = pageH - bottom - h;
+
+    const txMin = -x0;
+    const txMax = pageW - w - x0;
+    const tyMin = -y0;
+    const tyMax = pageH - h - y0;
+
+    return {
+      minX: txMin,
+      maxX: txMax,
+      minY: -tyMax,
+      maxY: -tyMin
+    };
   };
 
   const applyStyle = () => {
     img.style.width = `${img.dataset.baseW ? Number(img.dataset.baseW) : 240}px`;
     img.style.opacity = String(Math.max(0, Math.min(1, S.illustrationOpacity / 100)));
-    const lim = getLimit(S.illustrationScale);
-    S.illustrationOffsetX = clamp(S.illustrationOffsetX, -lim, lim);
-    S.illustrationOffsetY = clamp(S.illustrationOffsetY, -lim, lim);
+    const lim = getLimits(S.illustrationScale);
+    S.illustrationOffsetX = clamp(S.illustrationOffsetX, lim.minX, lim.maxX);
+    S.illustrationOffsetY = clamp(S.illustrationOffsetY, lim.minY, lim.maxY);
     img.style.transform = applyTransform(S.illustrationOffsetX, S.illustrationOffsetY, S.illustrationScale);
     if (sizeR) sizeR.value = String(S.illustrationScale);
     if (opaR) opaR.value = String(S.illustrationOpacity);
@@ -317,9 +407,9 @@ function installIllustrationEditor(container, scale) {
     if (!dragging) return;
     const dx = Math.round((e.clientX - startX) / Math.max(scale, 0.01));
     const dy = Math.round((e.clientY - startY) / Math.max(scale, 0.01));
-    const lim = getLimit(S.illustrationScale);
-    const nx = clamp(baseX + dx, -lim, lim);
-    const ny = clamp(baseY - dy, -lim, lim);
+    const lim = getLimits(S.illustrationScale);
+    const nx = clamp(baseX + dx, lim.minX, lim.maxX);
+    const ny = clamp(baseY - dy, lim.minY, lim.maxY);
     S.illustrationOffsetX = nx;
     S.illustrationOffsetY = ny;
     img.style.transform = applyTransform(nx, ny, S.illustrationScale);
@@ -331,9 +421,9 @@ function installIllustrationEditor(container, scale) {
     dragging = false;
     const dx = Math.round((e.clientX - startX) / Math.max(scale, 0.01));
     const dy = Math.round((e.clientY - startY) / Math.max(scale, 0.01));
-    const lim = getLimit(S.illustrationScale);
-    S.illustrationOffsetX = clamp(baseX + dx, -lim, lim);
-    S.illustrationOffsetY = clamp(baseY - dy, -lim, lim);
+    const lim = getLimits(S.illustrationScale);
+    S.illustrationOffsetX = clamp(baseX + dx, lim.minX, lim.maxX);
+    S.illustrationOffsetY = clamp(baseY - dy, lim.minY, lim.maxY);
     applyStyle();
     window.removeEventListener('pointermove', onDragMove);
     window.removeEventListener('pointerup', endDrag);
@@ -579,10 +669,10 @@ function updateProblemControlsUI() {
   const probsHelp = document.getElementById('probs-help');
   const addendsInput = document.getElementById('c-addends');
   const illEnabledField = document.getElementById('ill-enabled-field');
-  const illModeField = document.getElementById('ill-mode-field');
-  const illFileField = document.getElementById('ill-file-field');
-  const illUploadField = document.getElementById('ill-upload-field');
+  const illClearField = document.getElementById('ill-clear-field');
   const illDropzone = document.getElementById('ill-dropzone');
+  const maxNumField = document.getElementById('maxnum-field');
+  const illGallery = document.getElementById('ill-gallery');
   const opField = document.getElementById('op-field');
   const divModeField = document.getElementById('divmode-field');
   const addendsField = document.getElementById('addends-field');
@@ -610,12 +700,13 @@ function updateProblemControlsUI() {
     colsInput.disabled = true;
     probsHelp.innerHTML = '<i class="bi bi-info-circle"></i> En valor posicional usa maximo 6 por hoja para evitar desbordes.';
     showAnsField.style.display = 'none';
+    maxNumField.style.display = 'none';
 
     illEnabledField.style.display = '';
-    illModeField.style.display = S.illustrationEnabled ? '' : 'none';
-    illFileField.style.display = (S.illustrationEnabled && S.illustrationMode === 'manual') ? '' : 'none';
-    illUploadField.style.display = (S.illustrationEnabled && S.illustrationMode === 'manual') ? '' : 'none';
-    illDropzone.style.display = (S.illustrationEnabled && S.illustrationMode === 'manual') ? '' : 'none';
+    illClearField.style.display = S.illustrationEnabled ? '' : 'none';
+    illDropzone.style.display = S.illustrationEnabled ? '' : 'none';
+    illGallery.style.display = S.illustrationEnabled ? '' : 'none';
+    if (S.illustrationEnabled) renderIllustrationGallery();
     return;
   }
 
@@ -629,12 +720,13 @@ function updateProblemControlsUI() {
     probsHelp.innerHTML = '<i class="bi bi-info-circle"></i> En division por pasos el maximo depende de columnas (4 filas por pagina).';
   }
   showAnsField.style.display = '';
+  maxNumField.style.display = '';
 
   illEnabledField.style.display = '';
-  illModeField.style.display = S.illustrationEnabled ? '' : 'none';
-  illFileField.style.display = (S.illustrationEnabled && S.illustrationMode === 'manual') ? '' : 'none';
-  illUploadField.style.display = (S.illustrationEnabled && S.illustrationMode === 'manual') ? '' : 'none';
-  illDropzone.style.display = (S.illustrationEnabled && S.illustrationMode === 'manual') ? '' : 'none';
+  illClearField.style.display = S.illustrationEnabled ? '' : 'none';
+  illDropzone.style.display = S.illustrationEnabled ? '' : 'none';
+  illGallery.style.display = S.illustrationEnabled ? '' : 'none';
+  if (S.illustrationEnabled) renderIllustrationGallery();
 
   if (isAdd) {
     addendsLabel.innerHTML = '<i class="bi bi-diagram-3"></i> Sumandos';
@@ -643,6 +735,7 @@ function updateProblemControlsUI() {
     digitsLabel.textContent = 'Digitos por sumando';
     digitsWrap.style.display = '';
     carryField.style.display = '';
+    document.getElementById('carry-label').innerHTML = '<i class="bi bi-arrow-up-right-square"></i> Permitir llevadas';
     decimalsInput.disabled = false;
     decimalsField.style.display = '';
     sepField.style.display = '';
@@ -666,7 +759,10 @@ function updateProblemControlsUI() {
   };
   digitsLabel.textContent = digitsLegend[S.operation] || 'Digitos por operando';
   digitsWrap.style.display = '';
-  carryField.style.display = 'none';
+  carryField.style.display = (S.operation === 'sub') ? '' : 'none';
+  if (S.operation === 'sub') {
+    document.getElementById('carry-label').innerHTML = '<i class="bi bi-arrow-down-right-square"></i> Permitir prestamos';
+  }
 
   if (S.operation === 'mul' || S.operation === 'div') {
     decimalsInput.value = '0';
@@ -691,9 +787,10 @@ function init() {
 
   // ── Controles de VISUALIZACIÓN ──────────────────────────────────────────
   // Cambiar estos no toca los problemas generados, solo re-renderiza.
-  const displayIds = ['c-title', 'c-cols', 'c-sep', 'c-show-ans', 'c-ans-sheet', 'c-selfeval', 'c-ill-enabled', 'c-ill-mode', 'c-ill-file'];
+  const displayIds = ['c-title', 'c-cols', 'c-sep', 'c-show-ans', 'c-ans-sheet', 'c-selfeval', 'c-ill-enabled'];
   displayIds.forEach(id => {
     const el = document.getElementById(id);
+    if (!el) return;
     el.addEventListener('change', onDisplayChange);
     if (el.tagName === 'INPUT' && (el.type === 'text' || el.type === 'number')) {
       el.addEventListener('input', onDisplayChange);
@@ -702,11 +799,12 @@ function init() {
 
   // ── Controles ESTRUCTURALES ─────────────────────────────────────────────
   // Cambiar estos invalida los problemas actuales → regenerar.
-  const structIds = ['c-sheets', 'c-probs', 'c-kind', 'c-op', 'c-div-mode', 'c-place-level', 'c-place-blocks', 'c-addends', 'c-dec', 'c-carry'];
+  const structIds = ['c-sheets', 'c-probs', 'c-kind', 'c-op', 'c-maxnum', 'c-div-mode', 'c-place-level', 'c-place-blocks', 'c-addends', 'c-dec', 'c-carry'];
   structIds.forEach(id => {
     const el = document.getElementById(id);
+    if (!el) return;
     el.addEventListener('change', genAndPreview);
-    if (el.tagName === 'INPUT' && el.type === 'number') {
+    if (el.tagName === 'INPUT' && el.type === 'number' && id !== 'c-maxnum') {
       el.addEventListener('input', genAndPreview);
     }
   });
@@ -719,6 +817,15 @@ function init() {
   });
 
   const dropzone = document.getElementById('ill-dropzone');
+  dropzone.addEventListener('click', () => {
+    illUpload.click();
+  });
+  dropzone.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      illUpload.click();
+    }
+  });
   ['dragenter', 'dragover'].forEach(evt => {
     dropzone.addEventListener(evt, e => {
       e.preventDefault();
@@ -735,6 +842,11 @@ function init() {
     const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
     applyUploadedIllustration(file);
   });
+
+  const clearBtn = document.getElementById('c-ill-clear');
+  if (clearBtn) {
+    clearBtn.addEventListener('click', clearUploadedIllustration);
+  }
 
   window.addEventListener('resize', renderPreview);
 }

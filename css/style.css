@@ -200,10 +200,6 @@ body {
   width: 130px;
 }
 
-#c-ill-file {
-  width: 150px;
-}
-
 .field select {
   text-align: left;
   width: 132px;
@@ -214,6 +210,15 @@ body {
   font-size: 11.5px;
   text-align: left;
   padding: 4px;
+}
+
+.mini-btn {
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 12px;
+  cursor: pointer;
 }
 
 .field input[type="number"]:focus,
@@ -248,12 +253,41 @@ body {
   color: #64748b;
   text-align: center;
   background: #f8fbff;
+  cursor: pointer;
 }
 
 #ill-dropzone.dragover {
   border-color: #3b82f6;
   background: #eff6ff;
   color: #1e3a8a;
+}
+
+#ill-gallery {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  padding: 8px 12px 10px;
+  border-top: 1px solid #eef2f7;
+}
+
+.ill-thumb {
+  border: 1px solid #d9e2ef;
+  border-radius: 8px;
+  background: #fff;
+  padding: 4px;
+  cursor: pointer;
+}
+
+.ill-thumb img {
+  width: 100%;
+  height: 52px;
+  object-fit: contain;
+  display: block;
+}
+
+.ill-thumb.active {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.18);
 }
 
 .ws-ill-editable {
