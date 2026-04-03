@@ -36,19 +36,22 @@ function isWithinMaxNumber(prob) {
   const maxN = S.maxNumber;
   if (!maxN || maxN <= 0) return true;
 
+  const dec = prob.decimals || 0;
+  const maxScaled = maxN * pow10(dec);
+
   if (prob.op === 'add') {
     for (const d of prob.addends) {
-      if (digitsToInt(d) > maxN) return false;
+      if (digitsToInt(d) > maxScaled) return false;
     }
-    return prob.result <= maxN;
+    return prob.result <= maxScaled;
   }
 
   if (prob.op === 'place') return true;
 
-  if (prob.result > maxN) return false;
+  if (prob.result > maxScaled) return false;
   if (prob.operands) {
     for (const n of prob.operands) {
-      if (n > maxN) return false;
+      if (n > maxScaled) return false;
     }
   }
 
@@ -185,8 +188,40 @@ function generateSubProblem() {
 function generateMulProblem() {
   const d1 = S.digitCounts[0] || 2;
   const d2 = S.digitCounts[1] || 2;
-  const a = randWithDigits(d1);
-  const b = randWithDigits(d2);
+
+  const maxN = Math.max(1, S.maxNumber || 999999);
+  let minA = pow10(d1 - 1);
+  let maxA = Math.min(pow10(d1) - 1, maxN);
+  let minB = pow10(d2 - 1);
+  let maxB = Math.min(pow10(d2) - 1, maxN);
+
+  if (minA > maxA) {
+    minA = 1;
+    maxA = maxN;
+  }
+  if (minB > maxB) {
+    minB = 1;
+    maxB = maxN;
+  }
+
+  let a = minA;
+  let b = minB;
+  let found = false;
+  for (let i = 0; i < 220; i++) {
+    a = randInt(minA, maxA);
+    const localMaxB = Math.min(maxB, Math.floor(maxN / Math.max(1, a)));
+    if (localMaxB < minB) continue;
+    b = randInt(minB, localMaxB);
+    if (a * b <= maxN) {
+      found = true;
+      break;
+    }
+  }
+
+  if (!found) {
+    a = randInt(1, maxN);
+    b = randInt(1, Math.max(1, Math.floor(maxN / Math.max(1, a))));
+  }
 
   return {
     op: 'mul',

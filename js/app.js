@@ -774,6 +774,7 @@ function updateProblemControlsUI() {
   const decimalsField = document.getElementById('dec-field');
   const sepField = document.getElementById('sep-field');
   const showAnsField = document.getElementById('c-show-ans').closest('.field');
+  const hasIll = Boolean(S.illustrationUploadedUrl);
 
   if (!isOps) {
     opField.style.display = 'none';
@@ -792,7 +793,7 @@ function updateProblemControlsUI() {
     maxNumField.style.display = 'none';
 
     illEnabledField.style.display = '';
-    illClearField.style.display = S.illustrationEnabled ? '' : 'none';
+    illClearField.style.display = (S.illustrationEnabled && hasIll) ? '' : 'none';
     illDropzone.style.display = S.illustrationEnabled ? '' : 'none';
     illGallery.style.display = S.illustrationEnabled ? '' : 'none';
     if (S.illustrationEnabled) renderIllustrationGallery();
@@ -812,7 +813,7 @@ function updateProblemControlsUI() {
   maxNumField.style.display = '';
 
   illEnabledField.style.display = '';
-  illClearField.style.display = S.illustrationEnabled ? '' : 'none';
+  illClearField.style.display = (S.illustrationEnabled && hasIll) ? '' : 'none';
   illDropzone.style.display = S.illustrationEnabled ? '' : 'none';
   illGallery.style.display = S.illustrationEnabled ? '' : 'none';
   if (S.illustrationEnabled) renderIllustrationGallery();
